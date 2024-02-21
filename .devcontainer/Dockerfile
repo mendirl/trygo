@@ -1,1 +1,2 @@
-FROM buildpack-deps:bookworm-curl
+ARG VARIANT="bullseye"
+FROM buildpack-deps:${VARIANT}-curl
