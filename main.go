@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	vidio "github.com/AlexEidt/Vidio"
-	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -26,37 +25,26 @@ type void struct{}
 var member void
 
 func main() {
-	base := "/home/fabien/Videos"
-	//base := "/media/fabien/exdata/A1_over60"
+	base := "/media/fabien/exdata/A1_over60"
+	//dest := "/media/fabien/exdata/F"
 	result := CMap{value: make(map[uint][]string)}
 	keys := CSet{value: make(map[uint]void)}
-
 	ops := 0
 	var wg sync.WaitGroup
 
-	files, err := os.ReadDir("/home/fabien/Videos")
-	if err != nil {
-		log.Fatal(err)
-	}
-
+	files := listFiles(base)
 	filesSlices := chunkSlice(files, 4)
-
 	for _, filesSlice := range filesSlices {
-		for _, file := range filesSlice {
-			ops++
-			if !file.IsDir() {
-				wg.Add(1)
-				go read(base, file, ops, &wg, &result, &keys)
-			}
-		}
+		ops++
+		wg.Add(1)
+		go reads(filesSlice, ops, &wg, &result, &keys)
 	}
-
 	wg.Wait()
 
-	move(&result, &keys, base, err)
+	move(&result, &keys, base)
 }
 
-func move(result *CMap, keys *CSet, base string, err error) {
+func move(result *CMap, keys *CSet, base string) {
 	result.RLock()
 	keys.RLock()
 
@@ -77,7 +65,7 @@ func move(result *CMap, keys *CSet, base string, err error) {
 				split := strings.Split(f, "/")
 				destPath := base + "/verify/" + split[len(split)-1]
 				fmt.Printf("will mote to %v\n", destPath)
-				err = os.Rename(f, destPath)
+				err := os.Rename(f, destPath)
 				if err != nil {
 					log.Fatal(err)
 				}
@@ -85,28 +73,32 @@ func move(result *CMap, keys *CSet, base string, err error) {
 
 		}
 	}
-
-	//fmt.Printf("result : %v", list)
-
-	//fmt.Printf("result : %v", result.value)
 	keys.RUnlock()
 	result.RUnlock()
-	//err := filepath.Walk("/home/fabien/Videos",
-	//	func(path string, info os.FileInfo, err error) error {
-	//	)}
-	//if err != nil {
-	//	log.Fatal(err)
-	//}
 }
+func HandlePanic() {
+	r := recover()
 
-func read(base string, file fs.DirEntry, ops int, wg *sync.WaitGroup, result *CMap, keys *CSet) {
-	path := base + "/" + file.Name()
+	if r != nil {
+		fmt.Println("RECOVER", r)
+	}
+}
+func reads(files []string, ops int, wg *sync.WaitGroup, result *CMap, keys *CSet) {
+	for _, file := range files {
+		read(file, ops, wg, result, keys)
+	}
+}
+func read(file string, ops int, wg *sync.WaitGroup, result *CMap, keys *CSet) {
+	defer wg.Done()
+
+	path := file
 	fmt.Printf("%d, @@@ path : %s\n", ops, path)
 	video, err := vidio.NewVideo(path)
 	if err != nil {
 		fmt.Printf("ERROR : %s", err)
 	}
 
+	defer HandlePanic()
 	duration := video.Duration()
 	durationAsInt := uint(duration)
 	fmt.Printf("lengh : %f or %d \n", duration, durationAsInt)
@@ -120,11 +112,10 @@ func read(base string, file fs.DirEntry, ops int, wg *sync.WaitGroup, result *CM
 	result.Unlock()
 	keys.Unlock()
 
-	wg.Done()
 }
 
-func chunkSlice(slice []fs.DirEntry, chunkSize int) [][]fs.DirEntry {
-	var chunks [][]fs.DirEntry
+func chunkSlice(slice []string, chunkSize int) [][]string {
+	var chunks [][]string
 	for i := 0; i < len(slice); i += chunkSize {
 		end := i + chunkSize
 
@@ -139,18 +130,24 @@ func chunkSlice(slice []fs.DirEntry, chunkSize int) [][]fs.DirEntry {
 
 	return chunks
 }
-func listFiles(base string, files []string) {
+func listFiles(base string) []string {
+	files := make([]string, 0)
+
 	err := filepath.Walk(base,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
-			fmt.Println(path, info.Size())
-			files = append(files, path)
 
+			fmt.Println(path, info.Size())
+			if !info.IsDir() && strings.HasSuffix(path, ".mp4") {
+				files = append(files, path)
+			}
 			return nil
 		})
 	if err != nil {
 		log.Println(err)
 	}
+
+	return files
 }
