@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -25,8 +26,8 @@ type void struct{}
 var member void
 
 func main() {
-	//base := "/home/fabien/Videos"
-	base := "/media/fabien/exdata/A1_over60"
+	base := "/home/fabien/Videos"
+	//base := "/media/fabien/exdata/A1_over60"
 	result := CMap{value: make(map[uint][]string)}
 	keys := CSet{value: make(map[uint]void)}
 
@@ -52,6 +53,10 @@ func main() {
 
 	wg.Wait()
 
+	move(&result, &keys, base, err)
+}
+
+func move(result *CMap, keys *CSet, base string, err error) {
 	result.RLock()
 	keys.RLock()
 
@@ -133,4 +138,19 @@ func chunkSlice(slice []fs.DirEntry, chunkSize int) [][]fs.DirEntry {
 	}
 
 	return chunks
+}
+func listFiles(base string, files []string) {
+	err := filepath.Walk(base,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+			fmt.Println(path, info.Size())
+			files = append(files, path)
+
+			return nil
+		})
+	if err != nil {
+		log.Println(err)
+	}
 }
