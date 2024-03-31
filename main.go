@@ -45,7 +45,7 @@ func main() {
 			ops++
 			if !file.IsDir() {
 				wg.Add(1)
-				read(base, file, ops, &wg, &result, &keys)
+				go read(base, file, ops, &wg, &result, &keys)
 			}
 		}
 	}
